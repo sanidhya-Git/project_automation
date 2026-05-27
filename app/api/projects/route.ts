@@ -51,13 +51,21 @@ export async function POST(
       await req.json()
 
     // =========================
-    // CREATE GITHUB REPO
+    // REPO NAME
     // =========================
 
     const repoName =
       body.name
         .toLowerCase()
         .replace(/\s+/g, "-")
+
+    // =========================
+    // CREATE GITHUB REPO
+    // =========================
+
+    console.time(
+      "github-repo"
+    )
 
     const githubRepoResponse =
       await fetch(
@@ -90,6 +98,10 @@ export async function POST(
     const githubRepoData =
       await githubRepoResponse.json()
 
+    console.timeEnd(
+      "github-repo"
+    )
+
     if (
       !githubRepoResponse.ok
     ) {
@@ -99,12 +111,13 @@ export async function POST(
       )
 
       throw new Error(
+        githubRepoData.message ||
         "GitHub repo creation failed"
       )
     }
 
     // =========================
-    // INVITE DEVELOPERS
+    // GET TEAM MEMBERS
     // =========================
 
     const selectedMembers =
@@ -116,50 +129,59 @@ export async function POST(
         },
       })
 
-    for (const member of selectedMembers) {
+    // =========================
+    // INVITE DEVELOPERS
+    // =========================
 
-      if (
-        member.githubUsername
-      ) {
+    await Promise.all(
 
-        try {
+      selectedMembers.map(
+        async (member) => {
 
-          await fetch(
-
-            `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
-
-            {
-              method: "PUT",
-
-              headers: {
-
-                Authorization:
-                  `token ${process.env.GITHUB_TOKEN}`,
-
-                Accept:
-                  "application/vnd.github+json",
-
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-
-                permission:
-                  "push",
-              }),
-            }
-          )
-
-        } catch (error) {
-
-          console.log(
-            "GitHub invite failed:",
+          if (
             member.githubUsername
-          )
+          ) {
+
+            try {
+
+              await fetch(
+
+                `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
+
+                {
+                  method: "PUT",
+
+                  headers: {
+
+                    Authorization:
+                      `token ${process.env.GITHUB_TOKEN}`,
+
+                    Accept:
+                      "application/vnd.github+json",
+
+                    "Content-Type":
+                      "application/json",
+                  },
+
+                  body: JSON.stringify({
+
+                    permission:
+                      "push",
+                  }),
+                }
+              )
+
+            } catch (error) {
+
+              console.log(
+                "GitHub invite failed:",
+                member.githubUsername
+              )
+            }
+          }
         }
-      }
-    }
+      )
+    )
 
     // =========================
     // CREATE JIRA PROJECT
@@ -170,6 +192,10 @@ export async function POST(
         .replace(/[^A-Z0-9]/gi, "")
         .substring(0, 4)
         .toUpperCase()
+
+    console.time(
+      "jira-project"
+    )
 
     const jiraResponse =
       await fetch(
@@ -219,6 +245,10 @@ export async function POST(
     const jiraData =
       await jiraResponse.json()
 
+    console.timeEnd(
+      "jira-project"
+    )
+
     if (
       !jiraResponse.ok
     ) {
@@ -228,12 +258,13 @@ export async function POST(
       )
 
       throw new Error(
+        jiraData.errorMessages?.[0] ||
         "Jira project creation failed"
       )
     }
 
     // =========================
-    // SAVE PROJECT IN DB
+    // SAVE PROJECT
     // =========================
 
     const project =
@@ -279,6 +310,7 @@ export async function POST(
         progress: 0,
 
         activity: [
+
           {
             type:
               "project_created",

@@ -1,320 +1,244 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useState } from "react"
 
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import {
+  Upload,
+  FileText,
   ArrowLeft,
   ArrowRight,
   Check,
-  Upload,
-  Users,
-  FileText,
-  Figma,
-  Loader2,
 } from "lucide-react"
 
-import { DashboardLayout } from "@/components/layout"
-
-import { Button } from "@/components/ui/button"
-
-import { Input } from "@/components/ui/input"
-
-import { Textarea } from "@/components/ui/textarea"
-
-import { cn } from "@/lib/utils"
-
 import { toast } from "sonner"
-
-const steps = [
-  {
-    id: 1,
-    title: "Project Details",
-    icon: FileText,
-  },
-
-  {
-    id: 2,
-    title: "Upload Documents",
-    icon: Upload,
-  },
-
-  {
-    id: 3,
-    title: "Select Team",
-    icon: Users,
-  },
-]
-
-interface TeamMember {
-
-  _id: string
-
-  name: string
-
-  githubUrl: string
-
-  jiraEmail: string
-
-  projectCount: number
-}
-
-function getInitials(
-  name: string
-) {
-
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
-}
 
 export default function NewProjectPage() {
 
   const router =
     useRouter()
 
-  const [
-    currentStep,
-    setCurrentStep,
-  ] = useState(1)
+  const [step, setStep] =
+    useState(1)
 
-  const [
-    teamMembers,
-    setTeamMembers,
-  ] = useState<
-    TeamMember[]
-  >([])
+  const [isSubmitting,
+    setIsSubmitting] =
+    useState(false)
 
-  const [
-    isLoadingTeam,
-    setIsLoadingTeam,
-  ] = useState(true)
+  const [teamMembers,
+    setTeamMembers] =
+    useState<any[]>([])
 
-  const [
-    isSubmitting,
-    setIsSubmitting,
-  ] = useState(false)
+  const [formData,
+    setFormData] =
+    useState({
 
-  const [
-    formData,
-    setFormData,
-  ] = useState({
+      name: "",
 
-    name: "",
+      description: "",
 
-    description: "",
+      figmaLink: "",
 
-    prd:
-      null as File | null,
+      prd: null as File | null,
 
-    contract:
-      null as File | null,
+      contract:
+        null as File | null,
 
-    figmaLink: "",
+      selectedTeam:
+        [] as string[],
+    })
 
-    selectedTeam:
-      [] as string[],
-  })
+  // =========================
+  // FETCH TEAM MEMBERS
+  // =========================
 
   useEffect(() => {
 
-    fetchTeamMembers()
+    const fetchMembers =
+      async () => {
+
+        try {
+
+          const response =
+            await fetch(
+              "/api/team-members"
+            )
+
+          const data =
+            await response.json()
+
+          setTeamMembers(
+            data
+          )
+
+        } catch (error) {
+
+          console.log(error)
+        }
+      }
+
+    fetchMembers()
 
   }, [])
 
-  async function fetchTeamMembers() {
+  // =========================
+  // NEXT STEP
+  // =========================
 
-    try {
+  const nextStep = () => {
 
-      const response =
-        await fetch(
-          "/api/team-members"
-        )
+    if (step < 3) {
 
-      if (response.ok) {
-
-        const data =
-          await response.json()
-
-        setTeamMembers(data)
-      }
-
-    } catch (error) {
-
-      console.log(error)
-
-    } finally {
-
-      setIsLoadingTeam(false)
-    }
-  }
-
-  const handleNext = () => {
-
-    if (
-      currentStep <
-      steps.length
-    ) {
-
-      setCurrentStep(
-        currentStep + 1
+      setStep(
+        step + 1
       )
     }
   }
 
-  const handleBack = () => {
+  // =========================
+  // PREV STEP
+  // =========================
 
-    if (
-      currentStep > 1
-    ) {
+  const prevStep = () => {
 
-      setCurrentStep(
-        currentStep - 1
+    if (step > 1) {
+
+      setStep(
+        step - 1
       )
     }
   }
 
-  const toggleTeamMember = (
-    id: string
-  ) => {
+  // =========================
+  // SELECT DEVELOPER
+  // =========================
 
-    setFormData(
-      (prev) => ({
+  const toggleDeveloper =
+    (id: string) => {
 
-        ...prev,
+      setFormData({
+        ...formData,
 
         selectedTeam:
-          prev.selectedTeam.includes(
-            id
-          )
-            ? prev.selectedTeam.filter(
-                (m) =>
-                  m !== id
+
+          formData.selectedTeam.includes(id)
+
+            ? formData.selectedTeam.filter(
+                (memberId) =>
+                  memberId !== id
               )
+
             : [
-                ...prev.selectedTeam,
+                ...formData.selectedTeam,
                 id,
               ],
       })
-    )
-  }
+    }
+
+  // =========================
+  // CREATE PROJECT
+  // =========================
 
   const handleCreateProject =
     async () => {
 
-      setIsSubmitting(true)
-
       try {
 
-        let prdUrl = ""
-
-        let contractUrl =
-          ""
+        setIsSubmitting(true)
 
         // ===================
-        // UPLOAD PRD
+        // UPLOAD FILES
         // ===================
 
-        if (
-          formData.prd
-        ) {
+        const uploads = []
 
-          const prdFormData =
+        // PRD
+
+        if (formData.prd) {
+
+          const prdForm =
             new FormData()
 
-          prdFormData.append(
+          prdForm.append(
             "file",
             formData.prd
           )
 
-          const prdUpload =
-            await fetch(
+          uploads.push(
+
+            fetch(
               "/api/upload",
               {
-                method:
-                  "POST",
-
-                body:
-                  prdFormData,
+                method: "POST",
+                body: prdForm,
               }
+            ).then((res) =>
+              res.json()
             )
+          )
 
-          if (
-            !prdUpload.ok
-          ) {
+        } else {
 
-            throw new Error(
-              "Failed to upload PRD"
-            )
-          }
-
-          const prdResult =
-            await prdUpload.json()
-
-          prdUrl =
-            prdResult.url
+          uploads.push(
+            Promise.resolve({
+              url: "",
+            })
+          )
         }
 
-        // ===================
-        // UPLOAD CONTRACT
-        // ===================
+        // CONTRACT
 
         if (
           formData.contract
         ) {
 
-          const contractFormData =
+          const contractForm =
             new FormData()
 
-          contractFormData.append(
+          contractForm.append(
             "file",
             formData.contract
           )
 
-          const contractUpload =
-            await fetch(
+          uploads.push(
+
+            fetch(
               "/api/upload",
               {
-                method:
-                  "POST",
-
-                body:
-                  contractFormData,
+                method: "POST",
+                body: contractForm,
               }
+            ).then((res) =>
+              res.json()
             )
+          )
 
-          if (
-            !contractUpload.ok
-          ) {
+        } else {
 
-            throw new Error(
-              "Failed to upload contract"
-            )
-          }
-
-          const contractResult =
-            await contractUpload.json()
-
-          contractUrl =
-            contractResult.url
+          uploads.push(
+            Promise.resolve({
+              url: "",
+            })
+          )
         }
 
+        const [
+          prdResult,
+          contractResult,
+        ] = await Promise.all(
+          uploads
+        )
+
         // ===================
-        // SAVE PROJECT
+        // CREATE PROJECT
         // ===================
 
         const response =
           await fetch(
             "/api/projects",
             {
-              method:
-                "POST",
+              method: "POST",
 
               headers: {
                 "Content-Type":
@@ -332,9 +256,11 @@ export default function NewProjectPage() {
                 figmaLink:
                   formData.figmaLink,
 
-                prdUrl,
+                prdUrl:
+                  prdResult.url,
 
-                contractUrl,
+                contractUrl:
+                  contractResult.url,
 
                 teamMembers:
                   formData.selectedTeam,
@@ -351,7 +277,7 @@ export default function NewProjectPage() {
 
           throw new Error(
             result.error ||
-              "Failed to create project"
+              "Project creation failed"
           )
         }
 
@@ -367,13 +293,10 @@ export default function NewProjectPage() {
         error: any
       ) {
 
-        console.log(
-          error
-        )
+        console.log(error)
 
         toast.error(
-          error.message ||
-            "Something went wrong"
+          error.message
         )
 
       } finally {
@@ -386,638 +309,393 @@ export default function NewProjectPage() {
 
   return (
 
-    <DashboardLayout>
+    <div className="min-h-screen bg-black text-white p-8">
 
-      <div className="mx-auto max-w-3xl space-y-8">
-
-        {/* BACK BUTTON */}
-
-        <motion.div
-          initial={{
-            opacity: 0,
-            x: -10,
-          }}
-
-          animate={{
-            opacity: 1,
-            x: 0,
-          }}
-        >
-
-          <Link
-            href="/projects"
-
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-
-            <ArrowLeft className="h-4 w-4" />
-
-            Back to Projects
-
-          </Link>
-
-        </motion.div>
+      <div className="max-w-6xl mx-auto">
 
         {/* HEADER */}
 
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: -10,
-          }}
+        <div className="mb-10">
 
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
-        >
-
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-5xl font-bold mb-3">
             Create New Project
           </h1>
 
-          <p className="mt-1 text-muted-foreground">
-            Set up a new project with automated GitHub and Jira integration
+          <p className="text-zinc-400 text-lg">
+            Setup your project with
+            GitHub + Jira automation
           </p>
-
-        </motion.div>
+        </div>
 
         {/* STEPS */}
 
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 20,
-          }}
+        <div className="flex items-center justify-between mb-14">
 
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
+          {[1, 2, 3].map(
+            (item) => (
 
-          className="flex items-center justify-between"
-        >
+              <div
+                key={item}
 
-          {steps.map(
-            (
-              step,
-              index
-            ) => {
-
-              const Icon =
-                step.icon
-
-              const isActive =
-                step.id ===
-                currentStep
-
-              const isCompleted =
-                step.id <
-                currentStep
-
-              return (
+                className="flex flex-col items-center gap-3"
+              >
 
                 <div
-                  key={step.id}
 
-                  className="flex items-center"
+                  className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold border transition-all
+
+                  ${
+                    step > item
+
+                      ? "bg-emerald-500 border-emerald-500"
+
+                      : step === item
+
+                      ? "border-violet-500 text-violet-400"
+
+                      : "border-zinc-800 text-zinc-500"
+                  }`}
                 >
 
-                  <div className="flex flex-col items-center">
-
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all",
-
-                        isActive &&
-                          "border-primary bg-primary text-primary-foreground",
-
-                        isCompleted &&
-                          "border-primary bg-primary text-primary-foreground",
-
-                        !isActive &&
-                          !isCompleted &&
-                          "border-border bg-secondary text-muted-foreground"
-                      )}
-                    >
-
-                      {isCompleted ? (
-
-                        <Check className="h-5 w-5" />
-
-                      ) : (
-
-                        <Icon className="h-5 w-5" />
-                      )}
-
-                    </div>
-
-                    <span
-                      className={cn(
-                        "mt-2 text-xs font-medium",
-
-                        isActive &&
-                          "text-primary",
-
-                        !isActive &&
-                          "text-muted-foreground"
-                      )}
-                    >
-
-                      {step.title}
-
-                    </span>
-
-                  </div>
-
-                  {index <
-                    steps.length -
-                      1 && (
-
-                    <div
-                      className={cn(
-                        "mx-4 h-0.5 w-12 transition-colors",
-
-                        step.id <
-                          currentStep
-                          ? "bg-primary"
-                          : "bg-border"
-                      )}
-                    />
+                  {step > item ? (
+                    <Check className="w-6 h-6" />
+                  ) : (
+                    item
                   )}
-
                 </div>
-              )
-            }
-          )}
 
-        </motion.div>
+                <p className="text-sm text-zinc-400">
+                  {
+                    item === 1
+                      ? "Project Details"
+
+                      : item === 2
+                      ? "Upload Documents"
+
+                      : "Select Developers"
+                  }
+                </p>
+              </div>
+            )
+          )}
+        </div>
 
         {/* CARD */}
 
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 20,
-          }}
+        <div className="bg-[#050505] border border-zinc-900 rounded-3xl p-10">
 
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
+          {/* STEP 1 */}
 
-          className="rounded-xl border border-border bg-card p-8"
-        >
+          {step === 1 && (
 
-          <AnimatePresence mode="wait">
+            <div className="space-y-8">
 
-            {/* STEP 1 */}
+              <div>
 
-            {currentStep ===
-              1 && (
+                <label className="block mb-3 text-lg font-medium">
+                  Project Name
+                </label>
 
-              <motion.div
-                key="step1"
+                <input
 
-                initial={{
-                  opacity: 0,
-                  x: 20,
-                }}
+                  type="text"
 
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                }}
+                  value={
+                    formData.name
+                  }
 
-                exit={{
-                  opacity: 0,
-                  x: -20,
-                }}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
 
-                className="space-y-6"
-              >
+                      name:
+                        e.target.value,
+                    })
+                  }
 
-                <div>
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-5 py-4 outline-none"
 
-                  <h2 className="text-xl font-semibold">
-                    Project Details
+                  placeholder="Enter project name"
+                />
+              </div>
+
+              <div>
+
+                <label className="block mb-3 text-lg font-medium">
+                  Description
+                </label>
+
+                <textarea
+
+                  rows={6}
+
+                  value={
+                    formData.description
+                  }
+
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+
+                      description:
+                        e.target.value,
+                    })
+                  }
+
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-5 py-4 outline-none"
+
+                  placeholder="Project description"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2 */}
+
+          {step === 2 && (
+
+            <div className="space-y-8">
+
+              {/* PRD */}
+
+              <div className="border border-zinc-800 rounded-2xl p-10">
+
+                <div className="flex flex-col items-center gap-5">
+
+                  <Upload className="w-14 h-14 text-zinc-500" />
+
+                  <h2 className="text-2xl font-semibold">
+                    Upload PRD
                   </h2>
 
+                  <input
+
+                    id="prd-upload"
+
+                    type="file"
+
+                    accept=".pdf,.doc,.docx"
+
+                    className="hidden"
+
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+
+                        prd:
+                          e.target.files?.[0] || null,
+                      })
+                    }
+                  />
+
+                  <label
+
+                    htmlFor="prd-upload"
+
+                    className="cursor-pointer px-6 py-3 bg-emerald-500 text-black rounded-xl font-semibold hover:bg-emerald-400"
+                  >
+                    Choose File
+                  </label>
+
+                  {formData.prd && (
+
+                    <p className="text-zinc-400">
+
+                      {
+                        formData.prd.name
+                      }
+
+                    </p>
+                  )}
                 </div>
+              </div>
 
-                <div className="space-y-4">
+              {/* CONTRACT */}
 
-                  <div>
+              <div className="border border-zinc-800 rounded-2xl p-10">
 
-                    <label className="text-sm font-medium">
-                      Project Name
-                    </label>
+                <div className="flex flex-col items-center gap-5">
 
-                    <Input
-                      placeholder="E-commerce Platform"
+                  <FileText className="w-14 h-14 text-zinc-500" />
 
-                      value={
-                        formData.name
-                      }
-
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          name:
-                            e.target
-                              .value,
-                        })
-                      }
-
-                      className="mt-1.5"
-                    />
-
-                  </div>
-
-                  <div>
-
-                    <label className="text-sm font-medium">
-                      Description
-                    </label>
-
-                    <Textarea
-                      placeholder="Description"
-
-                      value={
-                        formData.description
-                      }
-
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description:
-                            e.target
-                              .value,
-                        })
-                      }
-
-                      className="mt-1.5 min-h-[120px]"
-                    />
-
-                  </div>
-
-                </div>
-
-              </motion.div>
-            )}
-
-            {/* STEP 2 */}
-
-            {currentStep ===
-              2 && (
-
-              <motion.div
-                key="step2"
-
-                initial={{
-                  opacity: 0,
-                  x: 20,
-                }}
-
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                }}
-
-                exit={{
-                  opacity: 0,
-                  x: -20,
-                }}
-
-                className="space-y-6"
-              >
-
-                <div>
-
-                  <h2 className="text-xl font-semibold">
-                    Upload Documents
+                  <h2 className="text-2xl font-semibold">
+                    Upload Contract
                   </h2>
 
+                  <input
+
+                    id="contract-upload"
+
+                    type="file"
+
+                    accept=".pdf,.doc,.docx"
+
+                    className="hidden"
+
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+
+                        contract:
+                          e.target.files?.[0] || null,
+                      })
+                    }
+                  />
+
+                  <label
+
+                    htmlFor="contract-upload"
+
+                    className="cursor-pointer px-6 py-3 bg-cyan-500 text-black rounded-xl font-semibold hover:bg-cyan-400"
+                  >
+                    Choose File
+                  </label>
+
+                  {formData.contract && (
+
+                    <p className="text-zinc-400">
+
+                      {
+                        formData.contract.name
+                      }
+
+                    </p>
+                  )}
                 </div>
+              </div>
 
-                <div className="space-y-6">
+              {/* FIGMA */}
 
-                  {/* PRD */}
+              <div>
 
-                  <div className="rounded-lg border border-dashed border-border p-6">
+                <label className="block mb-3 text-lg font-medium">
+                  Figma Link
+                </label>
 
-                    <div className="flex flex-col items-center justify-center text-center">
+                <input
 
-                      <Upload className="h-10 w-10 text-muted-foreground" />
+                  type="text"
 
-                      <p className="mt-2 font-medium">
-                        Upload PRD Document
-                      </p>
+                  value={
+                    formData.figmaLink
+                  }
 
-                      <input
-                        type="file"
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
 
-                        hidden
+                      figmaLink:
+                        e.target.value,
+                    })
+                  }
 
-                        id="prd-upload"
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-5 py-4 outline-none"
 
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            prd:
-                              e.target
-                                .files?.[0] ||
-                              null,
-                          })
-                        }
-                      />
+                  placeholder="https://figma.com/..."
+                />
+              </div>
+            </div>
+          )}
 
-                      <label htmlFor="prd-upload">
+          {/* STEP 3 */}
 
-                        <Button
-                          type="button"
+          {step === 3 && (
 
-                          variant="outline"
+            <div className="space-y-5">
 
-                          size="sm"
+              {teamMembers.map(
+                (member) => (
 
-                          className="mt-4"
-                        >
+                  <div
 
-                          {formData.prd
-                            ? formData
-                                .prd
-                                .name
-                            : "Choose File"}
+                    key={member._id}
 
-                        </Button>
+                    onClick={() =>
+                      toggleDeveloper(
+                        member._id
+                      )
+                    }
 
-                      </label>
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all
 
-                    </div>
+                    ${
+                      formData.selectedTeam.includes(
+                        member._id
+                      )
 
-                  </div>
+                        ? "border-emerald-500 bg-emerald-500/10"
 
-                  {/* CONTRACT */}
+                        : "border-zinc-800 bg-black"
+                    }`}
+                  >
 
-                  <div className="rounded-lg border border-dashed border-border p-6">
+                    <div className="flex items-center justify-between">
 
-                    <div className="flex flex-col items-center justify-center text-center">
+                      <div>
 
-                      <FileText className="h-10 w-10 text-muted-foreground" />
+                        <h3 className="text-xl font-semibold">
+                          {member.name}
+                        </h3>
 
-                      <p className="mt-2 font-medium">
-                        Upload Contract
-                      </p>
+                        <p className="text-zinc-400">
+                          {member.role}
+                        </p>
+                      </div>
 
-                      <input
-                        type="file"
+                      <div>
 
-                        hidden
+                        <input
+                          type="checkbox"
 
-                        id="contract-upload"
-
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            contract:
-                              e.target
-                                .files?.[0] ||
-                              null,
-                          })
-                        }
-                      />
-
-                      <label htmlFor="contract-upload">
-
-                        <Button
-                          type="button"
-
-                          variant="outline"
-
-                          size="sm"
-
-                          className="mt-4"
-                        >
-
-                          {formData.contract
-                            ? formData
-                                .contract
-                                .name
-                            : "Choose File"}
-
-                        </Button>
-
-                      </label>
-
-                    </div>
-
-                  </div>
-
-                  {/* FIGMA */}
-
-                  <div>
-
-                    <label className="text-sm font-medium">
-                      Figma Link
-                    </label>
-
-                    <div className="relative mt-1.5">
-
-                      <Figma className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                      <Input
-                        placeholder="https://figma.com/file/..."
-
-                        value={
-                          formData.figmaLink
-                        }
-
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            figmaLink:
-                              e.target
-                                .value,
-                          })
-                        }
-
-                        className="pl-9"
-                      />
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </motion.div>
-            )}
-
-            {/* STEP 3 */}
-
-            {currentStep ===
-              3 && (
-
-              <motion.div
-                key="step3"
-
-                initial={{
-                  opacity: 0,
-                  x: 20,
-                }}
-
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                }}
-
-                exit={{
-                  opacity: 0,
-                  x: -20,
-                }}
-
-                className="space-y-6"
-              >
-
-                <div>
-
-                  <h2 className="text-xl font-semibold">
-                    Select Team Members
-                  </h2>
-
-                </div>
-
-                {isLoadingTeam ? (
-
-                  <div className="flex items-center justify-center py-12">
-
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-
-                  </div>
-
-                ) : (
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-
-                    {teamMembers.map(
-                      (
-                        member
-                      ) => {
-
-                        const isSelected =
-                          formData.selectedTeam.includes(
+                          checked={formData.selectedTeam.includes(
                             member._id
-                          )
+                          )}
 
-                        return (
-
-                          <button
-                            key={
-                              member._id
-                            }
-
-                            onClick={() =>
-                              toggleTeamMember(
-                                member._id
-                              )
-                            }
-
-                            className={cn(
-                              "flex items-center gap-3 rounded-lg border p-4 text-left transition-all",
-
-                              isSelected
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/30"
-                            )}
-                          >
-
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-chart-2 font-medium text-primary-foreground">
-
-                              {getInitials(
-                                member.name
-                              )}
-
-                            </div>
-
-                            <div className="flex-1">
-
-                              <p className="font-medium">
-                                {
-                                  member.name
-                                }
-                              </p>
-
-                            </div>
-
-                            {isSelected && (
-
-                              <div className="rounded-full bg-primary p-1">
-
-                                <Check className="h-3 w-3 text-primary-foreground" />
-
-                              </div>
-                            )}
-
-                          </button>
-                        )
-                      }
-                    )}
-
+                          readOnly
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
-
-              </motion.div>
-            )}
-
-          </AnimatePresence>
+                )
+              )}
+            </div>
+          )}
 
           {/* BUTTONS */}
 
-          <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
+          <div className="flex items-center justify-between mt-12">
 
-            <Button
-              variant="outline"
+            <button
 
-              onClick={
-                handleBack
-              }
+              onClick={prevStep}
 
-              disabled={
-                currentStep ===
-                1
-              }
+              disabled={step === 1}
 
-              className="gap-2"
+              className="px-6 py-3 rounded-xl border border-zinc-800 flex items-center gap-2 disabled:opacity-50"
             >
 
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="w-5 h-5" />
 
               Back
+            </button>
 
-            </Button>
+            {step < 3 ? (
 
-            {currentStep <
-            steps.length ? (
+              <button
 
-              <Button
-                onClick={
-                  handleNext
-                }
+                onClick={nextStep}
 
-                className="gap-2"
+                className="px-6 py-3 rounded-xl bg-emerald-500 text-black font-semibold flex items-center gap-2"
               >
 
                 Next
 
-                <ArrowRight className="h-4 w-4" />
-
-              </Button>
+                <ArrowRight className="w-5 h-5" />
+              </button>
 
             ) : (
 
-              <Button
-                className="gap-2 bg-primary"
+              <button
 
                 onClick={
                   handleCreateProject
@@ -1026,38 +704,18 @@ export default function NewProjectPage() {
                 disabled={
                   isSubmitting
                 }
+
+                className="px-8 py-3 rounded-xl bg-violet-500 text-white font-semibold"
               >
 
-                {isSubmitting ? (
-
-                  <>
-
-                    <Loader2 className="h-4 w-4 animate-spin" />
-
-                    Creating...
-
-                  </>
-
-                ) : (
-
-                  <>
-
-                    <Check className="h-4 w-4" />
-
-                    Create Project
-
-                  </>
-                )}
-
-              </Button>
+                {isSubmitting
+                  ? "Creating..."
+                  : "Create Project"}
+              </button>
             )}
-
           </div>
-
-        </motion.div>
-
+        </div>
       </div>
-
-    </DashboardLayout>
+    </div>
   )
 }
