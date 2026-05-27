@@ -47,6 +47,9 @@ export default function NewProjectPage() {
 
       selectedTeam:
         [] as string[],
+
+      template:
+        "nodejs",
     })
 
   // =========================
@@ -88,7 +91,7 @@ export default function NewProjectPage() {
 
   const nextStep = () => {
 
-    if (step < 3) {
+    if (step < 4) {
 
       setStep(
         step + 1
@@ -264,6 +267,9 @@ export default function NewProjectPage() {
 
                 teamMembers:
                   formData.selectedTeam,
+
+                template:
+                  formData.template,
               }),
             }
           )
@@ -331,7 +337,7 @@ export default function NewProjectPage() {
 
         <div className="flex items-center justify-between mb-14">
 
-          {[1, 2, 3].map(
+          {[1, 2, 3, 4].map(
             (item) => (
 
               <div
@@ -365,15 +371,23 @@ export default function NewProjectPage() {
                 </div>
 
                 <p className="text-sm text-zinc-400">
+
                   {
                     item === 1
+
                       ? "Project Details"
 
                       : item === 2
+
                       ? "Upload Documents"
 
-                      : "Select Developers"
+                      : item === 3
+
+                      ? "Select Developers"
+
+                      : "Select Template"
                   }
+
                 </p>
               </div>
             )
@@ -661,6 +675,82 @@ export default function NewProjectPage() {
             </div>
           )}
 
+          {/* STEP 4 */}
+
+          {step === 4 && (
+
+            <div className="grid grid-cols-2 gap-6">
+
+              {/* NODEJS */}
+
+              <div
+
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+
+                    template:
+                      "nodejs",
+                  })
+                }
+
+                className={`p-8 rounded-2xl border cursor-pointer transition-all
+
+                ${
+                  formData.template ===
+                  "nodejs"
+
+                    ? "border-emerald-500 bg-emerald-500/10"
+
+                    : "border-zinc-800 bg-black"
+                }`}
+              >
+
+                <h2 className="text-3xl font-bold mb-3">
+                  Node.js
+                </h2>
+
+                <p className="text-zinc-400">
+                  Express starter template
+                </p>
+              </div>
+
+              {/* DOTNET */}
+
+              <div
+
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+
+                    template:
+                      "dotnet",
+                  })
+                }
+
+                className={`p-8 rounded-2xl border cursor-pointer transition-all
+
+                ${
+                  formData.template ===
+                  "dotnet"
+
+                    ? "border-cyan-500 bg-cyan-500/10"
+
+                    : "border-zinc-800 bg-black"
+                }`}
+              >
+
+                <h2 className="text-3xl font-bold mb-3">
+                  .NET
+                </h2>
+
+                <p className="text-zinc-400">
+                  ASP.NET starter template
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* BUTTONS */}
 
           <div className="flex items-center justify-between mt-12">
@@ -679,7 +769,7 @@ export default function NewProjectPage() {
               Back
             </button>
 
-            {step < 3 ? (
+            {step < 4 ? (
 
               <button
 

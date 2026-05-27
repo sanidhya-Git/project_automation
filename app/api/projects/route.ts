@@ -6,6 +6,8 @@ import Project from "@/lib/models/project"
 
 import TeamMember from "@/lib/models/team-member"
 
+import { templates } from "@/lib/template"
+
 export async function GET() {
 
   try {
@@ -115,6 +117,83 @@ export async function POST(
         "GitHub repo creation failed"
       )
     }
+
+
+
+// =========================
+// PUSH TEMPLATE FILES
+// =========================
+
+const selectedTemplate =
+  templates[
+    body.template as keyof typeof templates
+  ]
+
+if (selectedTemplate) {
+
+  // FIRST WAIT 3 SEC
+  // FOR REPO INITIALIZATION
+
+  await new Promise(
+    (resolve) =>
+      setTimeout(
+        resolve,
+        3000
+      )
+  )
+
+  for (
+    const file of selectedTemplate.files
+  ) {
+
+    const pushResponse =
+      await fetch(
+
+        `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/contents/${file.path}`,
+
+        {
+          method: "PUT",
+
+          headers: {
+
+            Authorization:
+              `token ${process.env.GITHUB_TOKEN}`,
+
+            Accept:
+              "application/vnd.github+json",
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+
+            message:
+              `Add ${file.path}`,
+
+            content:
+              Buffer.from(
+                file.content
+              ).toString(
+                "base64"
+              ),
+
+            branch:
+              "main",
+          }),
+        }
+      )
+
+    const pushData =
+      await pushResponse.json()
+
+    console.log(
+      "PUSH FILE:",
+      file.path,
+      pushData
+    )
+  }
+}
 
     // =========================
     // GET TEAM MEMBERS
@@ -333,6 +412,14 @@ export async function POST(
 
             message:
               `Jira project created: ${jiraData.key}`,
+          },
+
+          {
+            type:
+              "template_initialized",
+
+            message:
+              `${body.template} template pushed to repository`,
           },
         ],
       })
