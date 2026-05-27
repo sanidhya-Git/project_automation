@@ -1,22 +1,88 @@
-import axios from "axios"
+export async function createJiraTask({
 
-const jira = axios.create({
-  baseURL: `https://${process.env.JIRA_DOMAIN}/rest/api/3`,
-  auth: {
-    username: process.env.JIRA_EMAIL!,
-    password: process.env.JIRA_API_TOKEN!,
-  },
-})
+  projectKey,
 
-export async function createJiraProject(name: string) {
-  const response = await jira.post("/project", {
-    key: name.substring(0, 4).toUpperCase(),
-    name,
-    projectTypeKey: "software",
-    projectTemplateKey:
-      "com.pyxis.greenhopper.jira:gh-simplified-agility-scrum",
-    leadAccountId: "YOUR_ACCOUNT_ID",
-  })
+  summary,
 
-  return response.data
+  description,
+
+  assigneeId,
+
+}: any) {
+
+  return fetch(
+
+    `${process.env.JIRA_HOST}/rest/api/3/issue`,
+
+    {
+      method: "POST",
+
+      headers: {
+
+        Authorization:
+          `Basic ${Buffer.from(
+
+            `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+
+          ).toString("base64")}`,
+
+        Accept:
+          "application/json",
+
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify({
+
+        fields: {
+
+          project: {
+
+            key:
+              projectKey,
+          },
+
+          summary,
+
+          description: {
+
+            type: "doc",
+
+            version: 1,
+
+            content: [
+
+              {
+                type: "paragraph",
+
+                content: [
+
+                  {
+                    text:
+                      description,
+
+                    type: "text",
+                  },
+                ],
+              },
+            ],
+          },
+
+          issuetype: {
+
+            name: "Task",
+          },
+
+          assignee:
+            assigneeId
+              ? {
+                  id:
+                    assigneeId,
+                }
+              : undefined,
+        },
+      }),
+    }
+  )
 }

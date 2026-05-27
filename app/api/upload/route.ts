@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server"
 
-import cloudinary from "@/lib/cloudinary"
-
 export async function POST(
   req: Request
 ) {
@@ -29,35 +27,59 @@ export async function POST(
       )
     }
 
-    const bytes =
-      await file.arrayBuffer()
+    const cloudinaryForm =
+      new FormData()
 
-    const buffer =
-      Buffer.from(bytes)
+    cloudinaryForm.append(
+      "file",
+      file
+    )
 
-    const base64 =
-      `data:${file.type};base64,${buffer.toString("base64")}`
+    cloudinaryForm.append(
+      "upload_preset",
+      "project_uploads"
+    )
 
-    const upload =
-      await cloudinary.uploader.upload(
-        base64,
+    const response =
+      await fetch(
+
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+
         {
-          folder:
-            "projects",
+          method: "POST",
 
-          resource_type:
-            "auto",
+          body:
+            cloudinaryForm,
         }
       )
 
+    const data =
+      await response.json()
+
+    console.log(
+      "CLOUDINARY:",
+      data
+    )
+
+    if (!response.ok) {
+
+      throw new Error(
+        "Upload failed"
+      )
+    }
+
     return NextResponse.json({
+
       url:
-        upload.secure_url,
+        data.secure_url,
     })
 
   } catch (error) {
 
-    console.log(error)
+    console.log(
+      "UPLOAD ERROR:",
+      error
+    )
 
     return NextResponse.json(
       {

@@ -139,179 +139,168 @@ export default function NewProjectPage() {
       })
     }
 
-  // =========================
-  // CREATE PROJECT
-  // =========================
+const handleCreateProject = async () => {
 
-  const handleCreateProject =
-    async () => {
+  setIsSubmitting(true)
 
-      try {
+  try {
 
-        setIsSubmitting(true)
+    // =========================
+    // DECLARE URLS
+    // =========================
 
-        // ===================
-        // UPLOAD FILES
-        // ===================
+    let prdUrl = ""
 
-        const uploads = []
+    let contractUrl = ""
 
-        // PRD
+    // =========================
+    // UPLOAD PRD
+    // =========================
 
-        if (formData.prd) {
+    if (formData.prd) {
 
-          const prdForm =
-            new FormData()
+      const prdFormData =
+        new FormData()
 
-          prdForm.append(
-            "file",
-            formData.prd
-          )
+      prdFormData.append(
+        "file",
+        formData.prd
+      )
 
-          uploads.push(
+      const prdUpload =
+        await fetch(
+          "/api/upload",
+          {
+            method: "POST",
 
-            fetch(
-              "/api/upload",
-              {
-                method: "POST",
-                body: prdForm,
-              }
-            ).then((res) =>
-              res.json()
-            )
-          )
-
-        } else {
-
-          uploads.push(
-            Promise.resolve({
-              url: "",
-            })
-          )
-        }
-
-        // CONTRACT
-
-        if (
-          formData.contract
-        ) {
-
-          const contractForm =
-            new FormData()
-
-          contractForm.append(
-            "file",
-            formData.contract
-          )
-
-          uploads.push(
-
-            fetch(
-              "/api/upload",
-              {
-                method: "POST",
-                body: contractForm,
-              }
-            ).then((res) =>
-              res.json()
-            )
-          )
-
-        } else {
-
-          uploads.push(
-            Promise.resolve({
-              url: "",
-            })
-          )
-        }
-
-        const [
-          prdResult,
-          contractResult,
-        ] = await Promise.all(
-          uploads
+            body:
+              prdFormData,
+          }
         )
 
-        // ===================
-        // CREATE PROJECT
-        // ===================
+      if (!prdUpload.ok) {
 
-        const response =
-          await fetch(
-            "/api/projects",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-
-                name:
-                  formData.name,
-
-                description:
-                  formData.description,
-
-                figmaLink:
-                  formData.figmaLink,
-
-                prdUrl:
-                  prdResult.url,
-
-                contractUrl:
-                  contractResult.url,
-
-                teamMembers:
-                  formData.selectedTeam,
-
-                template:
-                  formData.template,
-              }),
-            }
-          )
-
-        const result =
-          await response.json()
-
-        if (
-          !response.ok
-        ) {
-
-          throw new Error(
-            result.error ||
-              "Project creation failed"
-          )
-        }
-
-        toast.success(
-          "Project Created Successfully"
-        )
-
-        router.push(
-          "/projects"
-        )
-
-      } catch (
-        error: any
-      ) {
-
-        console.log(error)
-
-        toast.error(
-          error.message
-        )
-
-      } finally {
-
-        setIsSubmitting(
-          false
+        throw new Error(
+          "PRD upload failed"
         )
       }
+
+      const prdResult =
+        await prdUpload.json()
+
+      prdUrl =
+        prdResult.url
     }
+
+    // =========================
+    // UPLOAD CONTRACT
+    // =========================
+
+    if (formData.contract) {
+
+      const contractFormData =
+        new FormData()
+
+      contractFormData.append(
+        "file",
+        formData.contract
+      )
+
+      const contractUpload =
+        await fetch(
+          "/api/upload",
+          {
+            method: "POST",
+
+            body:
+              contractFormData,
+          }
+        )
+
+      if (!contractUpload.ok) {
+
+        throw new Error(
+          "Contract upload failed"
+        )
+      }
+
+      const contractResult =
+        await contractUpload.json()
+
+      contractUrl =
+        contractResult.url
+    }
+
+    // =========================
+    // CREATE PROJECT
+    // =========================
+
+    const response =
+      await fetch(
+        "/api/projects",
+        {
+          method: "POST",
+
+          headers: {
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+
+            name:
+              formData.name,
+
+            description:
+              formData.description,
+
+            figmaLink:
+              formData.figmaLink,
+
+            prdUrl,
+
+            contractUrl,
+
+            template:
+              formData.template,
+
+            teamMembers:
+              formData.selectedTeam,
+          }),
+        }
+      )
+
+    if (!response.ok) {
+
+      const errorData =
+        await response.json()
+
+      console.log(
+        errorData
+      )
+
+      throw new Error(
+        "Project creation failed"
+      )
+    }
+
+    router.push(
+      "/projects"
+    )
+
+  } catch (error) {
+
+    console.log(
+      "CREATE PROJECT ERROR:",
+      error
+    )
+
+  } finally {
+
+    setIsSubmitting(false)
+  }
+}
 
   return (
 

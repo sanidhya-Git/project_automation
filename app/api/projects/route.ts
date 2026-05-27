@@ -6,7 +6,11 @@ import Project from "@/lib/models/project"
 
 import TeamMember from "@/lib/models/team-member"
 
-import { templates } from "@/lib/template"
+import { templates } from "@/lib/templates"
+
+import { generateTasks } from "@/lib/claude"
+
+import { createJiraTask } from "@/lib/jira"
 
 export async function GET() {
 
@@ -26,8 +30,6 @@ export async function GET() {
     )
 
   } catch (error) {
-
-    console.log(error)
 
     return NextResponse.json(
       {
@@ -52,26 +54,22 @@ export async function POST(
     const body =
       await req.json()
 
-    // =========================
-    // REPO NAME
-    // =========================
-
     const repoName =
       body.name
         .toLowerCase()
         .replace(/\s+/g, "-")
 
-    // =========================
-    // CREATE GITHUB REPO
-    // =========================
+    const selectedTemplate =
 
-    console.time(
-      "github-repo"
-    )
+      templates[
+        body.template as keyof typeof templates
+      ]
 
-    const githubRepoResponse =
+    const templateResponse =
       await fetch(
-        "https://api.github.com/user/repos",
+
+        `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${selectedTemplate.templateRepo}/generate`,
+
         {
           method: "POST",
 
@@ -81,7 +79,7 @@ export async function POST(
               `token ${process.env.GITHUB_TOKEN}`,
 
             Accept:
-              "application/vnd.github+json",
+              "application/vnd.github.baptiste-preview+json",
 
             "Content-Type":
               "application/json",
@@ -89,115 +87,34 @@ export async function POST(
 
           body: JSON.stringify({
 
+            owner:
+              process.env.GITHUB_USERNAME,
+
             name:
               repoName,
 
-            private: true,
+            private:
+              true,
           }),
         }
       )
 
     const githubRepoData =
-      await githubRepoResponse.json()
+      await templateResponse.json()
 
-    console.timeEnd(
-      "github-repo"
+    console.log(
+      "TEMPLATE RESPONSE:",
+      githubRepoData
     )
 
     if (
-      !githubRepoResponse.ok
+      !githubRepoData.owner
     ) {
 
-      console.log(
-        githubRepoData
-      )
-
       throw new Error(
-        githubRepoData.message ||
-        "GitHub repo creation failed"
+        "GitHub repository creation failed"
       )
     }
-
-
-
-// =========================
-// PUSH TEMPLATE FILES
-// =========================
-
-const selectedTemplate =
-  templates[
-    body.template as keyof typeof templates
-  ]
-
-if (selectedTemplate) {
-
-  // FIRST WAIT 3 SEC
-  // FOR REPO INITIALIZATION
-
-  await new Promise(
-    (resolve) =>
-      setTimeout(
-        resolve,
-        3000
-      )
-  )
-
-  for (
-    const file of selectedTemplate.files
-  ) {
-
-    const pushResponse =
-      await fetch(
-
-        `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/contents/${file.path}`,
-
-        {
-          method: "PUT",
-
-          headers: {
-
-            Authorization:
-              `token ${process.env.GITHUB_TOKEN}`,
-
-            Accept:
-              "application/vnd.github+json",
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-
-            message:
-              `Add ${file.path}`,
-
-            content:
-              Buffer.from(
-                file.content
-              ).toString(
-                "base64"
-              ),
-
-            branch:
-              "main",
-          }),
-        }
-      )
-
-    const pushData =
-      await pushResponse.json()
-
-    console.log(
-      "PUSH FILE:",
-      file.path,
-      pushData
-    )
-  }
-}
-
-    // =========================
-    // GET TEAM MEMBERS
-    // =========================
 
     const selectedMembers =
       await TeamMember.find({
@@ -208,73 +125,60 @@ if (selectedTemplate) {
         },
       })
 
-    // =========================
-    // INVITE DEVELOPERS
-    // =========================
+    for (
+      const member of selectedMembers
+    ) {
 
-    await Promise.all(
+      if (
+        member.githubUsername
+      ) {
 
-      selectedMembers.map(
-        async (member) => {
+        await fetch(
 
-          if (
-            member.githubUsername
-          ) {
+          `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
 
-            try {
+          {
+            method: "PUT",
 
-              await fetch(
+            headers: {
 
-                `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
+              Authorization:
+                `token ${process.env.GITHUB_TOKEN}`,
 
-                {
-                  method: "PUT",
+              Accept:
+                "application/vnd.github+json",
 
-                  headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-                    Authorization:
-                      `token ${process.env.GITHUB_TOKEN}`,
+            body: JSON.stringify({
 
-                    Accept:
-                      "application/vnd.github+json",
-
-                    "Content-Type":
-                      "application/json",
-                  },
-
-                  body: JSON.stringify({
-
-                    permission:
-                      "push",
-                  }),
-                }
-              )
-
-            } catch (error) {
-
-              console.log(
-                "GitHub invite failed:",
-                member.githubUsername
-              )
-            }
+              permission:
+                "push",
+            }),
           }
-        }
-      )
-    )
+        )
+      }
+    }
 
-    // =========================
-    // CREATE JIRA PROJECT
-    // =========================
+    const randomNumber =
+      Math.floor(
+        100 + Math.random() * 900
+      )
 
     const jiraKey =
-      body.name
-        .replace(/[^A-Z0-9]/gi, "")
-        .substring(0, 4)
-        .toUpperCase()
 
-    console.time(
-      "jira-project"
-    )
+      (
+        body.name
+          .replace(
+            /[^A-Z0-9]/gi,
+            ""
+          )
+          .substring(0, 4) +
+
+        randomNumber
+      ).toUpperCase()
 
     const jiraResponse =
       await fetch(
@@ -324,27 +228,130 @@ if (selectedTemplate) {
     const jiraData =
       await jiraResponse.json()
 
-    console.timeEnd(
-      "jira-project"
-    )
+    const aiResult =
+      await generateTasks({
+
+        projectName:
+          body.name,
+
+        description:
+          body.description,
+
+        figmaLink:
+          body.figmaLink,
+
+        prdText:
+          body.prdUrl,
+
+        developers:
+          selectedMembers,
+      })
 
     if (
-      !jiraResponse.ok
+      aiResult?.tasks?.length
     ) {
 
-      console.log(
-        jiraData
-      )
+      for (
+        const task of aiResult.tasks
+      ) {
 
-      throw new Error(
-        jiraData.errorMessages?.[0] ||
-        "Jira project creation failed"
-      )
+        await createJiraTask({
+
+          projectKey:
+            jiraData.key,
+
+          summary:
+            task.title,
+
+          description:
+`
+${task.description}
+
+Acceptance Criteria:
+
+${task.acceptanceCriteria
+  ?.map(
+    (item: string) =>
+      `- ${item}`
+  )
+  .join("\n")}
+`,
+        })
+      }
     }
 
-    // =========================
-    // SAVE PROJECT
-    // =========================
+    const readmeContent =
+`
+# ${body.name}
+
+## Description
+
+${body.description}
+
+---
+
+## Figma
+
+${body.figmaLink}
+
+---
+
+## PRD
+
+${body.prdUrl}
+
+---
+
+## AI Tasks
+
+${aiResult?.tasks
+  ?.map(
+    (task: any) =>
+`
+### ${task.title}
+
+${task.description}
+`
+  )
+  .join("\n")}
+`
+
+    await fetch(
+
+      `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/contents/README.md`,
+
+      {
+        method: "PUT",
+
+        headers: {
+
+          Authorization:
+            `token ${process.env.GITHUB_TOKEN}`,
+
+          Accept:
+            "application/vnd.github+json",
+
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+
+          message:
+            "Add AI README",
+
+          content:
+            Buffer.from(
+              readmeContent
+            ).toString(
+              "base64"
+            ),
+
+          branch:
+            "main",
+        }),
+      }
+    )
 
     const project =
       await Project.create({
@@ -387,41 +394,6 @@ if (selectedTemplate) {
           "In Progress",
 
         progress: 0,
-
-        activity: [
-
-          {
-            type:
-              "project_created",
-
-            message:
-              "Project created successfully",
-          },
-
-          {
-            type:
-              "github_repo_created",
-
-            message:
-              `GitHub repository created: ${githubRepoData.name}`,
-          },
-
-          {
-            type:
-              "jira_project_created",
-
-            message:
-              `Jira project created: ${jiraData.key}`,
-          },
-
-          {
-            type:
-              "template_initialized",
-
-            message:
-              `${body.template} template pushed to repository`,
-          },
-        ],
       })
 
     return NextResponse.json(
@@ -435,8 +407,7 @@ if (selectedTemplate) {
     return NextResponse.json(
       {
         error:
-          error.message ||
-          "Project creation failed",
+          error.message,
       },
       {
         status: 500,
