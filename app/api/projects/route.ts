@@ -1,40 +1,56 @@
 import { NextResponse } from "next/server"
 
 import dbConnect from "@/lib/mongodb"
-
 import Project from "@/lib/models/project"
-
 import TeamMember from "@/lib/models/team-member"
-
 import { templates } from "@/lib/templates"
-
 import { generateTasks } from "@/lib/claude"
-
 import { createJiraTask } from "@/lib/jira"
 
-export async function GET() {
-
+async function getJiraAccountId(email: string) {
   try {
+    const jiraAuth = Buffer.from(
+      `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+    ).toString("base64")
 
-    await dbConnect()
+    const response = await fetch(
+      `${process.env.JIRA_HOST}/rest/api/3/user/search?query=${email}`,
+      {
+        method: "GET",
 
-    const projects =
-      await Project.find()
-        .populate("teamMembers")
-        .sort({
-          createdAt: -1,
-        })
-
-    return NextResponse.json(
-      projects
+        headers: {
+          Authorization: `Basic ${jiraAuth}`,
+          Accept: "application/json",
+        },
+      }
     )
 
-  } catch (error) {
+    const data = await response.json()
 
+    console.log("JIRA USER SEARCH:", data)
+
+    return data?.[0]?.accountId || null
+  } catch (error) {
+    console.log("ACCOUNT ID FETCH ERROR:", error)
+    return null
+  }
+}
+
+export async function GET() {
+  try {
+    await dbConnect()
+
+    const projects = await Project.find()
+      .populate("teamMembers")
+      .sort({
+        createdAt: -1,
+      })
+
+    return NextResponse.json(projects)
+  } catch (error) {
     return NextResponse.json(
       {
-        error:
-          "Failed to fetch projects",
+        error: "Failed to fetch projects",
       },
       {
         status: 500,
@@ -43,61 +59,55 @@ export async function GET() {
   }
 }
 
-export async function POST(
-  req: Request
-) {
-
+export async function POST(req: Request) {
   try {
-
     await dbConnect()
 
-    const body =
-      await req.json()
+    const body = await req.json()
 
-    const repoName =
-      body.name
-        .toLowerCase()
-        .replace(/\s+/g, "-")
+    const baseRepoName = body.name
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+
+    const repoName = baseRepoName
 
     const selectedTemplate =
-
       templates[
         body.template as keyof typeof templates
       ]
 
-    const templateResponse =
-      await fetch(
+    // =========================
+    // CREATE GITHUB REPOSITORY
+    // =========================
 
-        `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${selectedTemplate.templateRepo}/generate`,
+    const templateResponse = await fetch(
+      `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${selectedTemplate.templateRepo}/generate`,
+      {
+        method: "POST",
 
-        {
-          method: "POST",
+        headers: {
+          Authorization: `token ${process.env.GITHUB_TOKEN}`,
 
-          headers: {
+          Accept:
+            "application/vnd.github.baptiste-preview+json",
 
-            Authorization:
-              `token ${process.env.GITHUB_TOKEN}`,
+          "Content-Type":
+            "application/json",
+        },
 
-            Accept:
-              "application/vnd.github.baptiste-preview+json",
+        body: JSON.stringify({
+          owner:
+            process.env.GITHUB_USERNAME,
 
-            "Content-Type":
-              "application/json",
-          },
+          name:
+            repoName,
 
-          body: JSON.stringify({
-
-            owner:
-              process.env.GITHUB_USERNAME,
-
-            name:
-              repoName,
-
-            private:
-              true,
-          }),
-        }
-      )
+          private:
+            true,
+        }),
+      }
+    )
 
     const githubRepoData =
       await templateResponse.json()
@@ -110,91 +120,86 @@ export async function POST(
     if (
       !githubRepoData.owner
     ) {
-
       throw new Error(
-        "GitHub repository creation failed"
+        githubRepoData.message ||
+          "GitHub repository creation failed"
       )
     }
 
+    // =========================
+    // GET TEAM MEMBERS
+    // =========================
+
     const selectedMembers =
       await TeamMember.find({
-
         _id: {
           $in:
             body.teamMembers,
         },
       })
 
+    // =========================
+    // INVITE GITHUB USERS
+    // =========================
+
     for (
       const member of selectedMembers
     ) {
-
       if (
         member.githubUsername
       ) {
+        try {
+          await fetch(
+            `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
+            {
+              method: "PUT",
 
-        await fetch(
+              headers: {
+                Authorization:
+                  `token ${process.env.GITHUB_TOKEN}`,
 
-          `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/collaborators/${member.githubUsername}`,
+                Accept:
+                  "application/vnd.github+json",
 
-          {
-            method: "PUT",
+                "Content-Type":
+                  "application/json",
+              },
 
-            headers: {
-
-              Authorization:
-                `token ${process.env.GITHUB_TOKEN}`,
-
-              Accept:
-                "application/vnd.github+json",
-
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-
-              permission:
-                "push",
-            }),
-          }
-        )
+              body: JSON.stringify({
+                permission:
+                  "push",
+              }),
+            }
+          )
+        } catch (error) {
+          console.log(
+            "GitHub Invite Error:",
+            error
+          )
+        }
       }
     }
 
-    const randomNumber =
-      Math.floor(
-        100 + Math.random() * 900
-      )
+    // =========================
+    // CREATE JIRA PROJECT
+    // =========================
 
     const jiraKey =
-
-      (
-        body.name
-          .replace(
-            /[^A-Z0-9]/gi,
-            ""
-          )
-          .substring(0, 4) +
-
-        randomNumber
-      ).toUpperCase()
+      body.name
+        .replace(/[^A-Z0-9]/gi, "")
+        .substring(0, 8)
+        .toUpperCase()
 
     const jiraResponse =
       await fetch(
-
         `${process.env.JIRA_HOST}/rest/api/3/project`,
-
         {
           method: "POST",
 
           headers: {
-
             Authorization:
               `Basic ${Buffer.from(
-
                 `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
-
               ).toString("base64")}`,
 
             Accept:
@@ -205,7 +210,6 @@ export async function POST(
           },
 
           body: JSON.stringify({
-
             key:
               jiraKey,
 
@@ -228,9 +232,25 @@ export async function POST(
     const jiraData =
       await jiraResponse.json()
 
+    console.log(
+      "JIRA PROJECT:",
+      jiraData
+    )
+
+    if (
+      jiraData?.errorMessages
+    ) {
+      throw new Error(
+        jiraData.errorMessages[0]
+      )
+    }
+
+    // =========================
+    // GENERATE AI TASKS
+    // =========================
+
     const aiResult =
       await generateTasks({
-
         projectName:
           body.name,
 
@@ -247,23 +267,53 @@ export async function POST(
           selectedMembers,
       })
 
+    console.log(
+      "AI RESULT:",
+      aiResult
+    )
+
+    // =========================
+    // CREATE JIRA TASKS
+    // =========================
+
     if (
       aiResult?.tasks?.length
     ) {
-
       for (
-        const task of aiResult.tasks
+        let index = 0;
+        index <
+        aiResult.tasks.length;
+        index++
       ) {
+        const task =
+          aiResult.tasks[index]
 
-        await createJiraTask({
+        const member =
+          selectedMembers[
+            index %
+              selectedMembers.length
+          ]
 
-          projectKey:
-            jiraData.key,
+        try {
+          let assigneeId = null
 
-          summary:
-            task.title,
+          if (
+            member?.jiraEmail
+          ) {
+            assigneeId =
+              await getJiraAccountId(
+                member.jiraEmail
+              )
+          }
 
-          description:
+          await createJiraTask({
+            projectKey:
+              jiraData.key,
+
+            summary:
+              task.title,
+
+            description:
 `
 ${task.description}
 
@@ -275,10 +325,45 @@ ${task.acceptanceCriteria
       `- ${item}`
   )
   .join("\n")}
+
+Priority:
+${task.priority}
+
+Type:
+${task.type}
 `,
-        })
+
+            issueType:
+              "Story",
+
+            assigneeId,
+
+            priority:
+              task.priority ===
+              "high"
+                ? "High"
+                : task.priority ===
+                  "medium"
+                ? "Medium"
+                : "Low",
+
+            labels: [
+              "ai-generated",
+              "claude-task",
+            ],
+          })
+        } catch (error) {
+          console.log(
+            "JIRA TASK ERROR:",
+            error
+          )
+        }
       }
     }
+
+    // =========================
+    // CREATE README
+    // =========================
 
     const readmeContent =
 `
@@ -311,20 +396,23 @@ ${aiResult?.tasks
 ### ${task.title}
 
 ${task.description}
+
+Priority:
+${task.priority}
+
+Type:
+${task.type}
 `
   )
   .join("\n")}
 `
 
     await fetch(
-
       `https://api.github.com/repos/${githubRepoData.owner.login}/${repoName}/contents/README.md`,
-
       {
         method: "PUT",
 
         headers: {
-
           Authorization:
             `token ${process.env.GITHUB_TOKEN}`,
 
@@ -336,7 +424,6 @@ ${task.description}
         },
 
         body: JSON.stringify({
-
           message:
             "Add AI README",
 
@@ -353,9 +440,12 @@ ${task.description}
       }
     )
 
+    // =========================
+    // SAVE PROJECT
+    // =========================
+
     const project =
       await Project.create({
-
         name:
           body.name,
 
@@ -387,8 +477,7 @@ ${task.description}
           jiraData.key,
 
         jiraBoardUrl:
-
-          `${process.env.JIRA_HOST}/jira/software/projects/${jiraData.key}/boards/1`,
+          `${process.env.JIRA_HOST}/jira/software/projects/${jiraData.key}`,
 
         status:
           "In Progress",
@@ -399,9 +488,7 @@ ${task.description}
     return NextResponse.json(
       project
     )
-
   } catch (error: any) {
-
     console.log(error)
 
     return NextResponse.json(
