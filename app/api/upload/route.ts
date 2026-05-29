@@ -27,23 +27,22 @@ export async function POST(
       )
     }
 
-    const cloudinaryForm =
-      new FormData()
+const cloudinaryForm =
+  new FormData()
 
-    cloudinaryForm.append(
-      "file",
-      file
-    )
+cloudinaryForm.append(
+  "file",
+  file
+)
 
-    cloudinaryForm.append(
-      "upload_preset",
-      "project_uploads"
-    )
-
+cloudinaryForm.append(
+  "upload_preset",
+  "projects"
+)
     const response =
       await fetch(
 
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/raw/upload`,
 
         {
           method: "POST",

@@ -77,10 +77,6 @@ export async function POST(req: Request) {
         body.template as keyof typeof templates
       ]
 
-    // =========================
-    // CREATE GITHUB REPOSITORY
-    // =========================
-
     const templateResponse = await fetch(
       `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${selectedTemplate.templateRepo}/generate`,
       {
@@ -88,7 +84,6 @@ export async function POST(req: Request) {
 
         headers: {
           Authorization: `token ${process.env.GITHUB_TOKEN}`,
-
           Accept:
             "application/vnd.github.baptiste-preview+json",
 
@@ -126,9 +121,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // =========================
-    // GET TEAM MEMBERS
-    // =========================
 
     const selectedMembers =
       await TeamMember.find({
@@ -138,9 +130,6 @@ export async function POST(req: Request) {
         },
       })
 
-    // =========================
-    // INVITE GITHUB USERS
-    // =========================
 
     for (
       const member of selectedMembers
@@ -179,75 +168,66 @@ export async function POST(req: Request) {
         }
       }
     }
+let jiraData: any = null
 
-    // =========================
-    // CREATE JIRA PROJECT
-    // =========================
+if (body.useJira) {
 
-    const jiraKey =
-      body.name
-        .replace(/[^A-Z0-9]/gi, "")
-        .substring(0, 8)
-        .toUpperCase()
+  const jiraKey =
+    body.name
+      .replace(/[^A-Z0-9]/gi, "")
+      .substring(0, 8)
+      .toUpperCase()
 
-    const jiraResponse =
-      await fetch(
-        `${process.env.JIRA_HOST}/rest/api/3/project`,
-        {
-          method: "POST",
+  const jiraResponse =
+    await fetch(
+      `${process.env.JIRA_HOST}/rest/api/3/project`,
+      {
+        method: "POST",
 
-          headers: {
-            Authorization:
-              `Basic ${Buffer.from(
-                `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
-              ).toString("base64")}`,
+        headers: {
+          Authorization:
+            `Basic ${Buffer.from(
+              `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`
+            ).toString("base64")}`,
 
-            Accept:
-              "application/json",
+          Accept: "application/json",
 
-            "Content-Type":
-              "application/json",
-          },
+          "Content-Type":
+            "application/json",
+        },
 
-          body: JSON.stringify({
-            key:
-              jiraKey,
+        body: JSON.stringify({
+          key: jiraKey,
 
-            name:
-              body.name,
+          name: body.name,
 
-            projectTypeKey:
-              "software",
+          projectTypeKey: "software",
 
-            projectTemplateKey:
-              "com.pyxis.greenhopper.jira:gh-simplified-agility-kanban",
+          projectTemplateKey:
+            "com.pyxis.greenhopper.jira:gh-simplified-agility-kanban",
 
-            leadAccountId:
-              process.env
-                .JIRA_ACCOUNT_ID,
-          }),
-        }
-      )
-
-    const jiraData =
-      await jiraResponse.json()
-
-    console.log(
-      "JIRA PROJECT:",
-      jiraData
+          leadAccountId:
+            process.env.JIRA_ACCOUNT_ID,
+        }),
+      }
     )
 
-    if (
-      jiraData?.errorMessages
-    ) {
-      throw new Error(
-        jiraData.errorMessages[0]
-      )
-    }
+  jiraData =
+    await jiraResponse.json()
 
-    // =========================
-    // GENERATE AI TASKS
-    // =========================
+  console.log(
+    "JIRA PROJECT:",
+    jiraData
+  )
+
+  if (
+    jiraData?.errorMessages
+  ) {
+    throw new Error(
+      jiraData.errorMessages[0]
+    )
+  }
+}
 
     const aiResult =
       await generateTasks({
@@ -272,12 +252,11 @@ export async function POST(req: Request) {
       aiResult
     )
 
-    // =========================
-    // CREATE JIRA TASKS
-    // =========================
 
     if (
-      aiResult?.tasks?.length
+       body.useJira &&
+  jiraData?.key &&
+  aiResult?.tasks?.length
     ) {
       for (
         let index = 0;
@@ -361,9 +340,6 @@ ${task.type}
       }
     }
 
-    // =========================
-    // CREATE README
-    // =========================
 
     const readmeContent =
 `
@@ -432,6 +408,7 @@ ${task.type}
               readmeContent
             ).toString(
               "base64"
+
             ),
 
           branch:
@@ -439,10 +416,6 @@ ${task.type}
         }),
       }
     )
-
-    // =========================
-    // SAVE PROJECT
-    // =========================
 
     const project =
       await Project.create({
@@ -470,14 +443,16 @@ ${task.type}
         githubRepoUrl:
           githubRepoData.html_url,
 
-        jiraProjectId:
-          jiraData.id,
+       jiraProjectId:
+  jiraData?.id || null,
 
-        jiraProjectKey:
-          jiraData.key,
+jiraProjectKey:
+  jiraData?.key || null,
 
-        jiraBoardUrl:
-          `${process.env.JIRA_HOST}/jira/software/projects/${jiraData.key}`,
+jiraBoardUrl:
+  jiraData?.key
+    ? `${process.env.JIRA_HOST}/jira/software/projects/${jiraData.key}`
+    : null,
 
         status:
           "In Progress",

@@ -161,19 +161,14 @@ export default function TeamsPage() {
 
               name:
                 formData.name,
-
               email:
                 formData.email,
-
               role:
                 formData.role,
-
               githubUsername:
                 formData.githubUsername,
-
               githubUrl:
                 formData.githubUrl,
-
               jiraEmail:
                 formData.jiraEmail,
             }),

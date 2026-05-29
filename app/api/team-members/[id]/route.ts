@@ -12,7 +12,7 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Remove member from all projects first
+
     await Project.updateMany(
       { teamMembers: id },
       { $pull: { teamMembers: id } }

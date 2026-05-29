@@ -116,8 +116,8 @@ export function Sidebar() {
                 exit={{ opacity: 0 }}
                 className="flex-1 truncate"
               >
-                <p className="text-sm font-medium">Alex Chen</p>
-                <p className="text-xs text-muted-foreground">Engineering Lead</p>
+                <p className="text-sm font-medium">Fulminous</p>
+                <p className="text-xs text-muted-foreground">Administrator</p>
               </motion.div>
             )}
           </div>

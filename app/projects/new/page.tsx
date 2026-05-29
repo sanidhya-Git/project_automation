@@ -39,6 +39,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 import Link from "next/link"
+import { templates } from "@/lib/templates"
 
 const steps = [
 
@@ -103,27 +104,19 @@ export default function NewProjectPage() {
   const [isSubmitting, setIsSubmitting] =
     useState(false)
 
-  const [formData, setFormData] =
-    useState({
+const [formData, setFormData] =
+  useState({
+    name: "",
+    description: "",
+    prd: null as File | null,
+    contract: null as File | null,
+    figmaLink: "",
+    template: "nextjs",
 
-      name: "",
+    useJira: true,
 
-      description: "",
-
-      prd:
-        null as File | null,
-
-      contract:
-        null as File | null,
-
-      figmaLink: "",
-
-      template:
-        "nextjs",
-
-      selectedTeam:
-        [] as string[],
-    })
+    selectedTeam: [] as string[],
+  })
 
   useEffect(() => {
 
@@ -231,9 +224,7 @@ export default function NewProjectPage() {
 
         let contractUrl = ""
 
-        // =========================
-        // UPLOAD PRD
-        // =========================
+
 
         if (
           formData.prd
@@ -266,9 +257,7 @@ export default function NewProjectPage() {
             prdResult.url
         }
 
-        // =========================
-        // UPLOAD CONTRACT
-        // =========================
+
 
         if (
           formData.contract
@@ -301,9 +290,6 @@ export default function NewProjectPage() {
             contractResult.url
         }
 
-        // =========================
-        // CREATE PROJECT
-        // =========================
 
         const response =
           await fetch(
@@ -319,27 +305,31 @@ export default function NewProjectPage() {
               },
 
               body:
-                JSON.stringify({
+                
+JSON.stringify({
 
-                  name:
-                    formData.name,
+  name:
+    formData.name,
 
-                  description:
-                    formData.description,
+  description:
+    formData.description,
 
-                  figmaLink:
-                    formData.figmaLink,
+  figmaLink:
+    formData.figmaLink,
 
-                  prdUrl,
+  prdUrl,
 
-                  contractUrl,
+  contractUrl,
 
-                  template:
-                    formData.template,
+  template:
+    formData.template,
 
-                  teamMembers:
-                    formData.selectedTeam,
-                }),
+  useJira:
+    formData.useJira,
+
+  teamMembers:
+    formData.selectedTeam,
+}),
             }
           )
 
@@ -669,67 +659,65 @@ export default function NewProjectPage() {
 
                   {/* TEMPLATE */}
 
-                  <div>
+      <div>
+  <label className="text-sm font-medium">
+    Project Template
+  </label>
 
-                    <label className="text-sm font-medium">
+  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+    {Object.keys(templates).map(
+      (template) => (
+        <button
+          key={template}
+          type="button"
+          onClick={() =>
+            setFormData({
+              ...formData,
+              template,
+            })
+          }
+          className={cn(
+            "rounded-lg border p-4 transition-all",
+            formData.template === template
+              ? "border-primary bg-primary/10"
+              : "border-border hover:border-primary/30"
+          )}
+        >
+          <Code2 className="mx-auto h-6 w-6" />
 
-                      Project Template
+          <p className="mt-2 text-sm font-medium capitalize">
+            {template}
+          </p>
+        </button>
+      )
+    )}
+  </div>
+</div>
+<div className="rounded-lg border p-4">
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="font-medium">
+        Enable Jira Automation
+      </p>
 
-                    </label>
+      <p className="text-sm text-muted-foreground">
+        Automatically create Jira project and tasks
+      </p>
+    </div>
 
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-
-                      {[
-                        "nextjs",
-                        "nodejs",
-                        "dotnet",
-                      ].map(
-                        (
-                          template
-                        ) => (
-
-                          <button
-
-                            key={
-                              template
-                            }
-
-                            onClick={() =>
-
-                              setFormData({
-
-                                ...formData,
-
-                                template,
-                              })
-                            }
-
-                            className={cn(
-
-                              "rounded-lg border p-4 transition-all",
-
-                              formData.template ===
-                                template
-
-                                ? "border-primary bg-primary/10"
-
-                                : "border-border hover:border-primary/30"
-                            )}
-                          >
-
-                            <Code2 className="mx-auto h-6 w-6" />
-
-                            <p className="mt-2 text-sm font-medium capitalize">
-
-                              {template}
-
-                            </p>
-
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
+    <input
+      type="checkbox"
+      checked={formData.useJira}
+      onChange={(e) =>
+        setFormData({
+          ...formData,
+          useJira: e.target.checked,
+        })
+      }
+      className="h-5 w-5"
+    />
+  </div>
+</div>
                 </div>
               </motion.div>
             )}
